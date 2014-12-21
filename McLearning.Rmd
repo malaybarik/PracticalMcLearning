@@ -1,0 +1,150 @@
+---
+title: "Practical Machine Learning"
+output: html_document
+---
+
+###Synopsys:
+Data has been collected using devices such as Jawbone Up, Nike FuelBand, and Fitbit about personal activities like way we exercise. Objective of our algorithm is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants and predict how accurately they are performing certain assigned exercise.
+Desission Tree and Random Forest algorithms are used. Random Forest produces better result.
+
+###Data Sources
+The training and test data for the project are available at 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+Original data source is: http://groupware.les.inf.puc-rio.br/har
+
+###Project Intended Results
+The goal of your project is to predict the manner in which six participant performed exercise. This is the “classe” variable in the training set. 
+Packages used 
+
+```{r}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+```
+
+###Setting the seed value
+
+```{r}
+set.seed(23232)
+```
+
+###Loading the dataset 
+```{r}
+pmlTrain <- read.csv("pml-training.csv", header=T)
+pmlTest <- read.csv("pml-testing.csv", header=T)
+```
+
+Partioning Training data set into two data sets, 60% for myTraining, 40% for myTesting:
+
+```{r}
+inTrain <- createDataPartition(y= pmlTrain$classe, p=0.6, list=FALSE)
+myTraining <- pmlTrain[inTrain, ]; 
+myTesting <- pmlTrain[-inTrain, ]
+```
+
+###Pre Processing the data
+
+To clean near zero variance variables -
+
+```{r}
+pmlDataNZV <- nearZeroVar(myTraining, saveMetrics=TRUE)
+```
+
+Follwoing code creates another subset without NZV variables:
+
+```{r}
+pmlNZVvars <- names(myTraining) %in% c("new_window", "kurtosis_roll_belt", "kurtosis_picth_belt", "kurtosis_yaw_belt", "skewness_roll_belt", "skewness_roll_belt.1", "skewness_yaw_belt", "max_yaw_belt", "min_yaw_belt", "amplitude_yaw_belt", "avg_roll_arm", "stddev_roll_arm",
+"var_roll_arm", "avg_pitch_arm", "stddev_pitch_arm", "var_pitch_arm", "avg_yaw_arm", "stddev_yaw_arm", "var_yaw_arm", "kurtosis_roll_arm", "kurtosis_picth_arm", "kurtosis_yaw_arm", "skewness_roll_arm", "skewness_pitch_arm", "skewness_yaw_arm", "max_roll_arm", "min_roll_arm", "min_pitch_arm", "amplitude_roll_arm", "amplitude_pitch_arm",
+"kurtosis_roll_dumbbell", "kurtosis_picth_dumbbell", "kurtosis_yaw_dumbbell", "skewness_roll_dumbbell", "skewness_pitch_dumbbell", "skewness_yaw_dumbbell", "max_yaw_dumbbell", "min_yaw_dumbbell", "amplitude_yaw_dumbbell", "kurtosis_roll_forearm", "kurtosis_picth_forearm", "kurtosis_yaw_forearm", "skewness_roll_forearm", "skewness_pitch_forearm", "skewness_yaw_forearm", "max_roll_forearm",
+"max_yaw_forearm", "min_roll_forearm", "min_yaw_forearm", "amplitude_roll_forearm", "amplitude_yaw_forearm", "avg_roll_forearm", "stddev_roll_forearm", "var_roll_forearm", "avg_pitch_forearm", "stddev_pitch_forearm", "var_pitch_forearm", "avg_yaw_forearm",
+"stddev_yaw_forearm", "var_yaw_forearm")
+myTraining <- myTraining[!pmlNZVvars]
+
+dim(myTraining)
+```
+
+Removing ID variable:
+
+```{r}
+myTraining <- myTraining[c(-1)]
+```
+
+Removing variables those have > 60% of NA’s
+
+```{r}
+newtrain <- myTraining #creating another subset to iterate in loop
+for(i in 1:length(myTraining)) { #for every column in the training dataset
+        if( sum( is.na( myTraining[, i] ) ))
+    for(j in 1:length(newtrain)) {
+          if( length( grep(names(myTraining[i]), names(newtrain)[j]) ) ==1)
+            {
+                newtrain <- newtrain [ , -j] 
+            }   
+        } 
+    }
+
+
+dim(newtrain)
+
+myTraining <- newtrain
+```
+
+Performing same 3 pre processing operation on test set
+
+```{r}
+ts1 <- colnames(myTraining)
+ts2 <- colnames(myTraining[, -58]) 
+myTesting <- myTesting[ts1]
+testing <- pmlTest[ts2]
+
+dim(myTesting)
+dim(testing)
+```
+
+In order to ensure proper functioning of Decision Trees and especially RandomForest Algorithm with the Test data set (data set provided), we need to coerce the data into the same type.
+
+```{r}
+for (i in 1:length(testing) ) {
+        for(j in 1:length(myTraining)) {
+        if( length( grep(names(myTraining[i]), names(testing)[j]) ) ==1)  
+        {
+            class(testing[j]) <- class(myTraining[i])
+        }      
+    }      
+}
+
+testing <- rbind(myTraining[2, -58] , testing) 
+testing <- testing[-1,]
+```
+
+###Using Decision Tree
+
+```{r}
+modelFit1 <- rpart(classe ~ ., data=myTraining, method="class")
+fancyRpartPlot(modelFit1)
+predictions1 <- predict(modelFit1, myTesting, type = "class")
+```
+
+Confusion Matrix
+
+```{r}
+confusionMatrix(predictions1, myTesting$classe)
+```
+
+###Using Random Forests
+
+```{r}
+modelFit2 <- randomForest(classe ~. , data=myTraining)
+predictions2 <- predict(modelFit2, myTesting, type = "class")
+```
+Confusion Matrix:
+```{r}
+confusionMatrix(predictions2, myTesting$classe)
+```
+
+###Conclusion
+Random Forests method produced better prediction result.
